@@ -1451,6 +1451,26 @@ def main():
         [data-testid="stSidebar"] * {
             color: #2C3E50 !important;
         }
+        /* MAIN CONTENT TEXT VISIBILITY */
+        .main .stMarkdown, .main h1, .main h2, .main h3, .main h4, .main p, .main label, .main span {
+             color: #1E1E1E !important;
+        }
+        /* Exclude buttons from the forced dark text so primary buttons (Red) keep white text */
+        button[kind="primary"] * {
+             color: #FFFFFF !important;
+        }
+        button[kind="secondary"] * {
+             color: #1E1E1E !important;
+        }
+        
+        /* Tabs Text Color Fix */
+        button[data-baseweb="tab"] div p {
+            color: #1E1E1E !important;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] div p {
+            color: #FFFFFF !important;
+        }
+
         /* Specific overrides for inputs ensuring text is visible */
         [data-testid="stSidebar"] input {
             color: #000000 !important;
@@ -1460,6 +1480,11 @@ def main():
         }
         [data-testid="stSidebar"] .stMarkdown p {
             color: #1E1E1E !important;
+        }
+        /* Input Fields Global */
+        .stTextArea textarea, .stTextInput input {
+            color: #1E1E1E !important;
+            caret-color: #1E1E1E !important;
         }
         /* Modern Tabs */
         div[data-baseweb="tab-list"] { gap: 8px; }
