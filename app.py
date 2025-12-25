@@ -31,6 +31,8 @@ try:
     from github_sync import GithubSync
 except ImportError:
     GithubSync = None
+    
+import fitz # PyMuPDF
 
 # =============================================================================
 # CONFIGURATION
@@ -1652,16 +1654,22 @@ def main():
             pdf_path = ROOT_DIR / selected_subject / f"Unit_{selected_unit}.pdf"
             if pdf_path.exists():
                 st.markdown(f"### 📖 Reading: {selected_subject} - Unit {selected_unit}")
-                # Embed PDF
-                with open(pdf_path, "rb") as f:
-                    b64_pdf = base64.b64encode(f.read()).decode('utf-8')
-                # Embed PDF viewer (Embed tag is better for data URIs)
-                pdf_display = f'<embed src="data:application/pdf;base64,{b64_pdf}" width="100%" height="800px" type="application/pdf">'
-                st.markdown(pdf_display, unsafe_allow_html=True)
                 
-                # Manual Fallback Links
-                st.caption("If the PDF doesn't load above, use the button below:")
-                st.download_button("⬇️ Download PDF", data=open(pdf_path, "rb"), file_name=f"{selected_subject}_U{selected_unit}.pdf", use_container_width=True)
+                # Render PDF as Images (Foolproof cross-browser compatibility)
+                try:
+                    doc = fitz.open(pdf_path)
+                    for page_num, page in enumerate(doc):
+                        pix = page.get_pixmap(dpi=150) # Good resolution
+                        img_bytes = pix.tobytes("png")
+                        st.image(img_bytes, caption=f"Page {page_num+1}", use_container_width=True)
+                        st.markdown("---") # Separator
+                except Exception as e:
+                    st.error(f"Error rendering PDF: {e}")
+                    st.warning("Could not render pages. Please download below.")
+
+                # Download Button (Always here)
+                with open(pdf_path, "rb") as f:
+                     st.download_button("⬇️ Download PDF", data=f, file_name=f"{selected_subject}_U{selected_unit}.pdf", use_container_width=True, type="primary")
             else:
                 st.warning(f"No PDF found for **{selected_subject} / Unit {selected_unit}**.")
                 st.info("Go to Editor to write and create one!")
