@@ -1447,17 +1447,19 @@ def main():
     # =========================================================================
     st.markdown("""
     <style>
-        /* Force dark text in sidebar */
-        section[data-testid="stSidebar"] .stMarkdown h1,
-        section[data-testid="stSidebar"] .stMarkdown h2,
-        section[data-testid="stSidebar"] .stMarkdown h3,
-        section[data-testid="stSidebar"] .stMarkdown p,
-        section[data-testid="stSidebar"] label,
-        section[data-testid="stSidebar"] .stTextInput input,
-        section[data-testid="stSidebar"] .stSelectbox,
-        section[data-testid="stSidebar"] div[data-testid="stExpander"] div[role="button"] p {
+        /* Force dark text in sidebar - STRONGER SELECTOR */
+        [data-testid="stSidebar"] * {
+            color: #2C3E50 !important;
+        }
+        /* Specific overrides for inputs ensuring text is visible */
+        [data-testid="stSidebar"] input {
+            color: #000000 !important;
+        }
+        [data-testid="stSidebar"] label {
             color: #1E1E1E !important;
-            font-weight: 500;
+        }
+        [data-testid="stSidebar"] .stMarkdown p {
+            color: #1E1E1E !important;
         }
         /* Modern Tabs */
         div[data-baseweb="tab-list"] { gap: 8px; }
