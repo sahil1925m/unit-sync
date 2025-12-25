@@ -1665,29 +1665,15 @@ def main():
                 # Render PDF as Images (Foolproof cross-browser compatibility)
                 if fitz:
                     try:
-                        # Zoom Control
-                        c_zoom, _ = st.columns([1, 4])
-                        with c_zoom:
-                            zoom_level = st.slider("🔍 Zoom", 50, 200, 100, step=10, help="Adjust page size")
-                        
                         doc = fitz.open(pdf_path)
                         for page_num, page in enumerate(doc):
-                            # Adjust DPI based on zoom for crisp text
-                            dpi = int(150 * (zoom_level / 100))
-                            pix = page.get_pixmap(dpi=dpi)
+                            # High DPI for crisp text (Ctrl+Scroll friendly)
+                            pix = page.get_pixmap(dpi=300) 
                             img_bytes = pix.tobytes("png")
                             
-                            # Calculate display width
-                            # If zoom is 100%, use container width. If custom, usage strict width?
-                            # Actually, st.image width param is pixels.
-                            # Let's just use width=None (auto) if Use Container Width is True.
-                            # But user wants adjust-table.
+                            # Use full container width; browser zoom handles the rest
+                            st.image(img_bytes, caption=f"Page {page_num+1}", use_container_width=True)
                             
-                            if zoom_level == 100:
-                                st.image(img_bytes, caption=f"Page {page_num+1}", use_container_width=True)
-                            else:
-                                st.image(img_bytes, caption=f"Page {page_num+1}", width=int(600 * (zoom_level/100))) # Base 600px
-                                
                             st.markdown("---") # Separator
                     except Exception as e:
                         st.error(f"Error rendering PDF: {e}")
