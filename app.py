@@ -1665,14 +1665,22 @@ def main():
                 # Render PDF as Images (Foolproof cross-browser compatibility)
                 if fitz:
                     try:
+                        # View Controls
+                        c_view, _ = st.columns([2, 5])
+                        with c_view:
+                            view_mode = st.radio("Display Mode", ["Fit Width ↔️", "Original Size 1:1 🔍"], horizontal=True, label_visibility="collapsed")
+                        
                         doc = fitz.open(pdf_path)
                         for page_num, page in enumerate(doc):
-                            # High DPI for crisp text (Ctrl+Scroll friendly)
+                            # High DPI for crisp text
                             pix = page.get_pixmap(dpi=300) 
                             img_bytes = pix.tobytes("png")
                             
-                            # Use full container width; browser zoom handles the rest
-                            st.image(img_bytes, caption=f"Page {page_num+1}", use_container_width=True)
+                            # Toggle Width Mode
+                            if "Fit Width" in view_mode:
+                                st.image(img_bytes, caption=f"Page {page_num+1}", use_container_width=True)
+                            else:
+                                st.image(img_bytes, caption=f"Page {page_num+1}") # Full resolution (scscribale)
                             
                             st.markdown("---") # Separator
                     except Exception as e:
