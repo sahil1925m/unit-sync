@@ -3,5 +3,5 @@ markdown2
 xhtml2pdf
 pypdf
 google-generativeai
-PyMuPDF
+pymupdf
 requests

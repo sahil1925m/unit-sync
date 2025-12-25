@@ -32,7 +32,12 @@ try:
 except ImportError:
     GithubSync = None
     
-import fitz # PyMuPDF
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+    # We will handle fitz=None in the Library tab
+
 
 # =============================================================================
 # CONFIGURATION
@@ -1658,16 +1663,20 @@ def main():
                 st.markdown(f"### 📖 Reading: {selected_subject} - Unit {selected_unit}")
                 
                 # Render PDF as Images (Foolproof cross-browser compatibility)
-                try:
-                    doc = fitz.open(pdf_path)
-                    for page_num, page in enumerate(doc):
-                        pix = page.get_pixmap(dpi=150) # Good resolution
-                        img_bytes = pix.tobytes("png")
-                        st.image(img_bytes, caption=f"Page {page_num+1}", use_container_width=True)
-                        st.markdown("---") # Separator
-                except Exception as e:
-                    st.error(f"Error rendering PDF: {e}")
-                    st.warning("Could not render pages. Please download below.")
+                if fitz:
+                    try:
+                        doc = fitz.open(pdf_path)
+                        for page_num, page in enumerate(doc):
+                            pix = page.get_pixmap(dpi=150) # Good resolution
+                            img_bytes = pix.tobytes("png")
+                            st.image(img_bytes, caption=f"Page {page_num+1}", use_container_width=True)
+                            st.markdown("---") # Separator
+                    except Exception as e:
+                        st.error(f"Error rendering PDF: {e}")
+                        st.warning("Could not render pages. Please download below.")
+                else:
+                    st.error("⚠️ PDF Renderer (PyMuPDF) is missing on the server.")
+                    st.info("Try Rebooting the App (Manage App -> Reboot) to install dependencies.")
 
                 # Download Button (Always here)
                 with open(pdf_path, "rb") as f:
