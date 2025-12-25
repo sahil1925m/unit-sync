@@ -1655,8 +1655,8 @@ def main():
                 # Embed PDF
                 with open(pdf_path, "rb") as f:
                     b64_pdf = base64.b64encode(f.read()).decode('utf-8')
-                # Embed PDF viewer (Iframe method as requested)
-                pdf_display = f'<iframe src="data:application/pdf;base64,{b64_pdf}" width="100%" height="800" type="application/pdf" style="border-radius:10px;"></iframe>'
+                # Embed PDF viewer (Embed tag is better for data URIs)
+                pdf_display = f'<embed src="data:application/pdf;base64,{b64_pdf}" width="100%" height="800px" type="application/pdf">'
                 st.markdown(pdf_display, unsafe_allow_html=True)
                 
                 # Manual Fallback Links
