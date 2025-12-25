@@ -20,14 +20,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import markdown2
 from xhtml2pdf import pisa
-# Handle different pypdf/PyPDF2 versions
-try:
-    from pypdf import PdfMerger
-except ImportError:
-    try:
-        from PyPDF2 import PdfMerger
-    except ImportError:
-        from PyPDF2 import PdfFileMerger as PdfMerger
+from pypdf import PdfWriter, PdfReader
 import io
 import os
 import shutil
@@ -690,24 +683,18 @@ def consolidate_pdf(subject, unit, markdown_content, overwrite=False):
                 return True, f"✅ Created new Unit {unit} PDF"
         else:
             # APPEND: Add to existing PDF
-            merger = PdfMerger()
+            writer = PdfWriter()
             
             # Add existing PDF
-            merger.append(str(unit_path))
+            writer.append(str(unit_path))
             
             # Add new content
             new_pdf_buffer = io.BytesIO(new_pdf_bytes)
-            merger.append(new_pdf_buffer)
+            writer.append(new_pdf_buffer)
             
             # Write merged PDF
-            output_buffer = io.BytesIO()
-            merger.write(output_buffer)
-            merger.close()
-            
-            # Save to file
-            output_buffer.seek(0)
             with open(unit_path, 'wb') as f:
-                f.write(output_buffer.getvalue())
+                writer.write(f)
             
             # Save markdown source for Library reading (append)
             save_markdown_source(subject, unit, markdown_content)
