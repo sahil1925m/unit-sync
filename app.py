@@ -487,11 +487,12 @@ def get_units_with_content(subject):
 # =============================================================================
 # PDF GENERATION & CONSOLIDATION
 # =============================================================================
-def convert_markdown_to_pdf(markdown_text):
+def convert_markdown_to_pdf(markdown_text, subject, unit):
     """Convert Markdown to PDF bytes with Paper White theme for printing."""
-    # Add timestamp header
+    # Add Header and timestamp
     timestamp = datetime.now().strftime("%B %d, %Y at %I:%M %p")
-    timestamped_md = f"---\n\n**📅 Added on: {timestamp}**\n\n---\n\n{markdown_text}"
+    header_info = f"# 📘 {subject} - Unit {unit}\n\n"
+    timestamped_md = f"{header_info}---\n\n**📅 Updated on: {timestamp}**\n\n---\n\n{markdown_text}"
     
     # Convert to HTML
     html_content = markdown2.markdown(
@@ -672,8 +673,9 @@ def consolidate_pdf(subject, unit, markdown_content, overwrite=False):
         try: shutil.copy(unit_path, backup_path)
         except: pass
     
+    
     # Convert new content to PDF
-    new_pdf_bytes = convert_markdown_to_pdf(markdown_content)
+    new_pdf_bytes = convert_markdown_to_pdf(markdown_content, subject, unit)
     
     try:
         if overwrite or not unit_path.exists():
