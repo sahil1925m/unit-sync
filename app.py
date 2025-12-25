@@ -22,6 +22,7 @@ import markdown2
 from xhtml2pdf import pisa
 from pypdf import PdfWriter, PdfReader
 import io
+import base64
 import os
 import shutil
 from datetime import datetime
@@ -1434,361 +1435,198 @@ def get_preview_html(html_content, api_key=None):
 # MAIN APPLICATION
 # =============================================================================
 def main():
-    # Initialize session state
-    if "active_subject" not in st.session_state:
-        st.session_state.active_subject = None
-    if "markdown_content" not in st.session_state:
-        st.session_state.markdown_content = ""
-    if "app_mode" not in st.session_state:
-        st.session_state.app_mode = "Editor"
-    if "library_subject" not in st.session_state:
-        st.session_state.library_subject = None
-    if "library_unit" not in st.session_state:
-        st.session_state.library_unit = None
-    if "note_editor" not in st.session_state:
-        st.session_state.note_editor = ""
+    # Initialize session state (Simplified)
+    for key in ["active_subject", "note_editor"]:
+        if key not in st.session_state: st.session_state[key] = ""
+    if "gh_token" not in st.session_state: st.session_state.gh_token = ""
     
-    # Ensure root directory exists
     ensure_root_dir()
     
     # =========================================================================
-    # SIDEBAR
+    # GLOBAL STYLING (Fix Sidebar Contrast)
     # =========================================================================
+    st.markdown("""
+    <style>
+        /* Force dark text in sidebar */
+        section[data-testid="stSidebar"] .stMarkdown h1,
+        section[data-testid="stSidebar"] .stMarkdown h2,
+        section[data-testid="stSidebar"] .stMarkdown h3,
+        section[data-testid="stSidebar"] .stMarkdown p,
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] .stTextInput input,
+        section[data-testid="stSidebar"] .stSelectbox,
+        section[data-testid="stSidebar"] div[data-testid="stExpander"] div[role="button"] p {
+            color: #1E1E1E !important;
+            font-weight: 500;
+        }
+        /* Modern Tabs */
+        div[data-baseweb="tab-list"] { gap: 8px; }
+        button[data-baseweb="tab"] {
+            border-radius: 6px;
+            padding: 8px 16px;
+            background-color: #f0f2f6;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background-color: #FF4B4B;
+            color: white !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # =========================================================================
-    # SIDEBAR
+    # SIDEBAR: GLOBAL CONTEXT & SYNC
     # =========================================================================
+    subjects = get_subjects()
+    selected_subject = None
+    selected_unit = 1
+
     with st.sidebar:
-        st.markdown('<div style="text-align: center; margin-bottom: 20px;">', unsafe_allow_html=True)
         st.markdown("# 📚 Unit-Sync")
-        st.markdown("*Hierarchical Note Manager*")
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # 1. NAVIGATION (Mode)
-        st.markdown("### 🧭 Navigation")
-        app_mode = st.radio(
-            "Mode",
-            ["✏️ Editor", "📖 Library"],
-            label_visibility="collapsed",
-            horizontal=True,
-            key="mode_radio"
-        )
-        st.session_state.app_mode = app_mode
+        st.caption("Hierarchical Note Manager")
         st.markdown("---")
         
-        # 2. CONTEXT (Selection)
-        subjects = get_subjects()
-        st.markdown("### 🎯 Active Context")
-        
+        st.markdown("### 🎯 Context")
         if subjects:
-            # Subject Select
-            selected_subject = st.selectbox(
-                "📂 Subject",
-                subjects,
-                index=subjects.index(st.session_state.active_subject) if st.session_state.active_subject in subjects else 0,
-                key="subject_select"
-            )
+            # Smart Indexing
+            idx = 0
+            if st.session_state.active_subject in subjects:
+                idx = subjects.index(st.session_state.active_subject)
+                
+            selected_subject = st.selectbox("📂 Subject", subjects, index=idx, key="global_subj")
             st.session_state.active_subject = selected_subject
             
-            # Unit Select
-            selected_unit = st.selectbox(
-                "📄 Unit",
-                list(range(1, MAX_UNITS + 1)),
-                format_func=lambda x: f"Unit {x}",
-                key="unit_select"
-            )
-            
-            # Write Mode (Only show in Editor)
-            if app_mode == "✏️ Editor":
-                st.markdown("#### ✍️ Write settings")
-                write_mode = st.radio(
-                    "Mode",
-                    ["Append", "Overwrite"],
-                    horizontal=True,
-                    label_visibility="collapsed",
-                    key="write_mode",
-                    help="Append: Add to existing PDF | Overwrite: Replace entire PDF"
-                )
+            selected_unit = st.selectbox("📄 Unit", list(range(1, MAX_UNITS + 1)), key="global_unit")
         else:
-            selected_subject = None
-            selected_unit = 1
-            write_mode = "Append"
-            st.info("⚠️ No subjects found. Create one below.")
-
+            st.warning("⚠️ No subjects yet.")
+            st.info("Go to 'Manage' tab to create one.")
+            
         st.markdown("---")
-
-        # 3. MANAGEMENT ACTIONS (Expanders)
-        st.markdown("### 🛠️ Management")
         
-        with st.expander("➕ Create New Subject", expanded=not subjects):
-            new_subject = st.text_input("Name", placeholder="e.g., CyberSecurity...", key="new_subject_input")
-            if st.button("Create Subject", use_container_width=True, type="primary"):
-                if new_subject:
-                    success, msg = create_subject(new_subject)
-                    if success:
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.error(msg)
-                else:
-                    st.warning("Enter a name")
-
+        # SYNC UI
+        with st.expander("☁️ Cloud Sync"):
+            token_display = st.secrets.get("GITHUB_TOKEN", "") or st.session_state.gh_token
+            repo_display = st.secrets.get("GITHUB_REPO", "") or st.session_state.get("gh_repo", "")
+            
+            gh_token = st.text_input("GitHub Token", value=token_display, type="password", key="s_token")
+            gh_repo = st.text_input("Repository (user/repo)", value=repo_display, key="s_repo")
+            
+            if st.button("Save Sync Config"):
+                st.session_state.gh_token = gh_token
+                st.session_state.gh_repo = gh_repo
+                st.success("Saved!")
+                
+    # =========================================================================
+    # MAIN AREA: TABS
+    # =========================================================================
+    tab_edit, tab_lib, tab_manage = st.tabs(["✏️ Editor", "📖 Library", "⚙️ Manage"])
+    
+    # --- TAB 1: EDITOR ---
+    with tab_edit:
         if selected_subject:
-            with st.expander(f"⚙️ Manage '{selected_subject}'", expanded=False):
+            col_e1, col_e2 = st.columns([1, 1], gap="medium")
+            
+            with col_e1:
+                st.markdown(f"#### 📝 Editing: {selected_subject} / Unit {selected_unit}")
+                
+                # Write Mode Logic
+                write_mode = st.radio("Mode", ["Append", "Overwrite"], horizontal=True, label_visibility="collapsed")
+                
+                st.caption("Markdown Input")
+                markdown_input = st.text_area("Content", height=400, key="note_editor", label_visibility="collapsed")
+                
+                # Logic callbacks
+                def do_update():
+                    if st.session_state.note_editor.strip():
+                        # Save
+                        is_overwrite = (write_mode == "Overwrite")
+                        ok, msg = consolidate_pdf(selected_subject, selected_unit, st.session_state.note_editor, is_overwrite)
+                        if ok: 
+                            st.success(msg)
+                            st.session_state.note_editor = "" 
+                            
+                            # Sync
+                            t = st.session_state.gh_token or st.secrets.get("GITHUB_TOKEN")
+                            r = st.session_state.get("gh_repo") or st.secrets.get("GITHUB_REPO")
+                            if GithubSync and t and r:
+                                try:
+                                    s = GithubSync(t, r)
+                                    p = ROOT_DIR / selected_subject / f"Unit_{selected_unit}.pdf"
+                                    o, sm = s.push_file(p, f"Update {selected_subject} - Unit {selected_unit}")
+                                    if o: st.toast(f"☁️ {sm}")
+                                    else: st.error(sm)
+                                except: pass
+                        else: st.error(msg)
+                
+                def do_clear(): st.session_state.note_editor = ""
+
+                b1, b2 = st.columns(2)
+                b1.button(f"📥 {write_mode} PDF", type="primary", use_container_width=True, on_click=do_update)
+                b2.button("🗑️ Clear", use_container_width=True, on_click=do_clear)
+
+            with col_e2:
+                st.markdown("#### 👁️ Preview")
+                if markdown_input.strip():
+                    html = markdown2.markdown(markdown_input, extras=["fenced-code-blocks", "tables"])
+                    # Use AI styling if Key exists, else basic
+                    components.html(get_preview_html(html, "AIzaSyA9NxKDmjUYgTqN5CK4la-VhbpxmG91E7Y"), height=500, scrolling=True)
+                else:
+                    st.info("Start typing to preview...")
+        else:
+            st.info("👈 Select or Create a Subject first!")
+
+    # --- TAB 2: LIBRARY ---
+    with tab_lib:
+        if selected_subject:
+            pdf_path = ROOT_DIR / selected_subject / f"Unit_{selected_unit}.pdf"
+            if pdf_path.exists():
+                st.markdown(f"### 📖 Reading: {selected_subject} - Unit {selected_unit}")
+                # Embed PDF
+                with open(pdf_path, "rb") as f:
+                    b64_pdf = base64.b64encode(f.read()).decode('utf-8')
+                st.markdown(f'<iframe src="data:application/pdf;base64,{b64_pdf}" width="100%" height="800" style="border-radius:10px;"></iframe>', unsafe_allow_html=True)
+                
+                st.download_button("⬇️ Download PDF", data=open(pdf_path, "rb"), file_name=f"{selected_subject}_U{selected_unit}.pdf")
+            else:
+                st.warning(f"No PDF found for **{selected_subject} / Unit {selected_unit}**.")
+                st.info("Go to Editor to write and create one!")
+        else:
+            st.info("Select a Subject.")
+
+    # --- TAB 3: MANAGE (CRUD) ---
+    with tab_manage:
+        st.markdown("### 🛠️ Data Management")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("#### ➕ New Subject")
+            new_sub = st.text_input("Subject Name", placeholder="Maths...")
+            if st.button("Create"):
+                if new_sub:
+                    ok, m = create_subject(new_sub)
+                    if ok: st.success(m); st.rerun()
+                    else: st.error(m)
+        
+        with c2:
+            if selected_subject:
+                st.markdown(f"#### ⚙️ Manage '{selected_subject}'")
                 # Rename
-                st.caption("Rename Subject")
-                rename_col1, rename_col2 = st.columns([2, 1])
-                new_name = rename_col1.text_input("New Name", label_visibility="collapsed", placeholder="New name...", key="rename_sbj_input")
-                if rename_col2.button("Rename", key="rename_btn"):
-                    if new_name:
-                        s, m = rename_subject(selected_subject, new_name)
-                        if s: 
-                            st.success(m) 
-                            st.rerun()
-                        else: st.error(m)
+                rn = st.text_input("Rename to", placeholder="New name...")
+                if st.button("Rename Subject"):
+                    ok, m = rename_subject(selected_subject, rn)
+                    if ok: st.success(m); st.rerun()
+                    else: st.error(m)
                 
                 st.divider()
+                if st.button("🗑️ Delete Subject", type="primary"):
+                    st.session_state.confirm_del = True
                 
-                # Delete Subject
-                if st.button("�️ Delete Entire Subject", type="primary", use_container_width=True):
-                    st.session_state.confirm_delete_subject = True
-                
-                if st.session_state.get("confirm_delete_subject"):
-                    st.error("Are you sure? This deletes ALL units!")
-                    d_col1, d_col2 = st.columns(2)
-                    if d_col1.button("Yes, Delete"):
+                if st.session_state.get("confirm_del"):
+                    st.error("Really delete?")
+                    if st.button("Yes, Delete!"):
                         delete_subject(selected_subject)
-                        st.session_state.confirm_delete_subject = False
                         st.session_state.active_subject = None
-                        st.rerun()
-                    if d_col2.button("Cancel"):
-                        st.session_state.confirm_delete_subject = False
+                        st.session_state.confirm_del = False
                         st.rerun()
 
-            with st.expander("📄 Manage Units", expanded=False):
-                unit_files = get_unit_files(selected_subject)
-                if unit_files:
-                    st.caption(f"Existing Units in {selected_subject}")
-                    # List units with delete buttons
-                    unit_to_del = st.selectbox("Select to delete", [u['unit'] for u in unit_files], format_func=lambda x: f"Unit {x}", key="del_unit_sel")
-                    
-                    if st.button(f"🗑️ Delete Unit {unit_to_del}", use_container_width=True):
-                        delete_unit(selected_subject, unit_to_del)
-                        st.success(f"Deleted Unit {unit_to_del}")
-                        st.rerun()
-                else:
-                    st.info("No units created yet.")
-        
-        st.markdown("---")
-        
-        # 4. STATS
-        if subjects:
-            total_units = sum(len(get_unit_files(s)) for s in subjects)
-            st.caption(f"📊 Stats: {len(subjects)} Subjects | {total_units} Units")
-            
-        # 5. CLOUD SYNC
-        st.markdown("---")
-        with st.expander("☁️ Cloud Sync Setup"):
-            st.caption("Sync notes to GitHub for mobile access")
-            
-            # Use secrets if available, else session state
-            token_val = st.secrets.get("GITHUB_TOKEN", "") if "GITHUB_TOKEN" in st.secrets else st.session_state.get("gh_token", "")
-            repo_val = st.secrets.get("GITHUB_REPO", "") if "GITHUB_REPO" in st.secrets else st.session_state.get("gh_repo", "")
-            
-            gh_token = st.text_input("GitHub Token", value=token_val, type="password", key="gh_token_input")
-            gh_repo = st.text_input("Repository (user/repo)", value=repo_val, key="gh_repo_input")
-            
-            if st.button("Save Credentials"):
-                if gh_token and gh_repo:
-                    st.session_state.gh_token = gh_token
-                    st.session_state.gh_repo = gh_repo
-                    st.success("Credentials Saved!")
-                else:
-                    st.error("Missing fields")
-            
-            if st.session_state.get("gh_token") or "GITHUB_TOKEN" in st.secrets:
-                st.success(f"✅ Ready to Sync")
-
-    
-    # =========================================================================
-    # MAIN CONTENT
-    # =========================================================================
-    st.markdown('<h1 class="main-header">📚 Unit-Sync</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Hierarchical Note Consolidation Tool</p>', unsafe_allow_html=True)
-    
-    # =========================================================================
-    # LIBRARY MODE
-    # =========================================================================
-    if st.session_state.app_mode == "📖 Library":
-        subjects = get_subjects()
-        
-        if not subjects:
-            st.info("📚 Your library is empty! Switch to Editor mode and create some notes.")
-            return
-        
-        st.markdown("### 📚 Your Library")
-        st.markdown("*Browse your notes and use Select-to-Define to learn*")
-        st.markdown("---")
-        
-        # Subject selection for Library
-        lib_col1, lib_col2 = st.columns([1, 3])
-        
-        with lib_col1:
-            st.markdown("#### 📂 Subjects")
-            for subj in subjects:
-                units_count = len(get_unit_files(subj))
-                if st.button(f"📁 {subj} ({units_count})", key=f"lib_subj_{subj}", use_container_width=True):
-                    st.session_state.library_subject = subj
-                    st.session_state.library_unit = None
-                    st.rerun()
-            
-            # Show units for selected subject
-            if st.session_state.library_subject:
-                st.markdown("---")
-                st.markdown(f"#### 📄 Units in {st.session_state.library_subject}")
-                units = get_unit_files(st.session_state.library_subject)
-                if units:
-                    for u in units:
-                        if st.button(f"� Unit {u['unit']} ({u['size']})", key=f"lib_unit_{u['unit']}", use_container_width=True):
-                            st.session_state.library_unit = u['unit']
-                            st.rerun()
-                else:
-                    st.markdown("*No PDF units yet*")
-        
-        with lib_col2:
-            if st.session_state.library_subject and st.session_state.library_unit:
-                # Reader view - PDF Display
-                st.markdown(f"#### 📖 {st.session_state.library_subject} - Unit {st.session_state.library_unit}")
-                st.markdown("*Your PDF notes*")
-                
-                # Get PDF as base64 and embed
-                pdf_data = get_pdf_base64(st.session_state.library_subject, st.session_state.library_unit)
-                
-                if pdf_data:
-                    # Embed PDF viewer
-                    pdf_display = f'''
-                    <iframe 
-                        src="data:application/pdf;base64,{pdf_data}" 
-                        width="100%" 
-                        height="750px" 
-                        type="application/pdf"
-                        style="border: 1px solid #333; border-radius: 8px;">
-                    </iframe>
-                    '''
-                    st.markdown(pdf_display, unsafe_allow_html=True)
-                else:
-                    st.warning("PDF not available. Try creating notes first.")
-            elif st.session_state.library_subject:
-                st.info(f"👈 Select a unit from **{st.session_state.library_subject}** to view the PDF")
-            else:
-                st.info("👈 Select a subject to browse your notes")
-        
-        return
-    
-    # =========================================================================
-    # EDITOR MODE (Original functionality)
-    # =========================================================================
-    if not selected_subject:
-        st.info("👈 Create a subject in the sidebar to get started!")
-        return
-    
-    # Current context
-    st.markdown(f"**Active:** `{selected_subject}` → **Unit {selected_unit}**")
-    
-    # Editor and Preview columns
-    col1, col2 = st.columns([1, 1], gap="medium")
-    
-    with col1:
-        st.markdown("### ✏️ Note Editor")
-        st.markdown("*Paste your Markdown notes here*")
-        
-        markdown_input = st.text_area(
-            "Markdown Editor",
-            height=400,
-            label_visibility="collapsed",
-            placeholder="# Your Notes Here\n\nPaste notes from Gemini, ChatGPT, or write your own...",
-            key="note_editor"
-        )
-        
-        # Callbacks for cleaner state management
-        def clear_editor_callback():
-            st.session_state.note_editor = ""
-            
-        def update_pdf_callback():
-             if st.session_state.note_editor.strip():
-                try:
-                    is_overwrite = (write_mode == "Overwrite")
-                    success, msg = consolidate_pdf(selected_subject, selected_unit, st.session_state.note_editor, overwrite=is_overwrite)
-                    if success:
-                        st.success(msg)
-                        st.session_state.note_editor = ""
-                        
-                        # --- GITHUB SYNC ---
-                        token = st.session_state.get("gh_token") or (st.secrets["GITHUB_TOKEN"] if "GITHUB_TOKEN" in st.secrets else None)
-                        repo = st.session_state.get("gh_repo") or (st.secrets["GITHUB_REPO"] if "GITHUB_REPO" in st.secrets else None)
-                        
-                        if GithubSync and token and repo:
-                            try:
-                                syncer = GithubSync(token, repo)
-                                pdf_path = ROOT_DIR / selected_subject / f"Unit_{selected_unit}.pdf"
-                                ok, s_msg = syncer.push_file(pdf_path, f"Update {selected_subject} Unit {selected_unit}")
-                                if ok: 
-                                    st.toast(f"☁️ Synced to GitHub")
-                                else: 
-                                    st.error(f"Cloud Error: {s_msg}")
-                            except Exception as sync_e:
-                                st.error(f"Sync Failed: {sync_e}")
-                        # -------------------
-                    else:
-                        st.error(msg)
-                except Exception as e:
-                    st.error(f"Error: {e}")
-             else:
-                st.warning("Enter some notes first!")
-
-        # Action buttons
-        btn_col1, btn_col2 = st.columns(2)
-        
-        with btn_col1:
-            # Determine button text based on mode
-            mode_text = "Overwrite" if write_mode == "Overwrite" else "Append to"
-            st.button(f"� {mode_text} Unit PDF", use_container_width=True, type="primary", on_click=update_pdf_callback)
-        
-        with btn_col2:
-            st.button("🗑️ Clear", use_container_width=True, on_click=clear_editor_callback)
-    
-    with col2:
-        st.markdown("### 👁️ Live Preview")
-        st.markdown("*Select text to get AI definitions*")
-        
-        if markdown_input.strip():
-            html_content = markdown2.markdown(
-                markdown_input,
-                extras=["fenced-code-blocks", "tables", "strike", "header-ids"]
-            )
-        else:
-            html_content = "<p style='color: #666;'>Start typing to see preview...</p>"
-        
-        # API key hardcoded (user added it in code)
-        api_key = "AIzaSyA9NxKDmjUYgTqN5CK4la-VhbpxmG91E7Y"
-        preview_html = get_preview_html(html_content, api_key)
-        
-        components.html(preview_html, height=450, scrolling=True)
-    
-    # Download existing PDF
-    st.markdown("---")
-    unit_path = ROOT_DIR / selected_subject / f"Unit_{selected_unit}.pdf"
-    if unit_path.exists():
-        with open(unit_path, "rb") as f:
-            pdf_data = f.read()
-        st.download_button(
-            f"⬇️ Download Unit {selected_unit} PDF",
-            data=pdf_data,
-            file_name=f"{selected_subject}_Unit_{selected_unit}.pdf",
-            mime="application/pdf"
-        )
-
-# =============================================================================
-# ENTRY POINT
-# =============================================================================
 if __name__ == "__main__":
     main()
