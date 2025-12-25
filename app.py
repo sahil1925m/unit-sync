@@ -1567,8 +1567,9 @@ def main():
                 st.markdown("#### 👁️ Preview")
                 if markdown_input.strip():
                     html = markdown2.markdown(markdown_input, extras=["fenced-code-blocks", "tables"])
-                    # Use AI styling if Key exists, else basic
-                    components.html(get_preview_html(html, "AIzaSyA9NxKDmjUYgTqN5CK4la-VhbpxmG91E7Y"), height=500, scrolling=True)
+                    # Secure API Key
+                    api_key = st.secrets.get("GOOGLE_API_KEY", "")
+                    components.html(get_preview_html(html, api_key), height=500, scrolling=True)
                 else:
                     st.info("Start typing to preview...")
         else:
