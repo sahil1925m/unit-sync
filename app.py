@@ -664,6 +664,12 @@ def consolidate_pdf(subject, unit, markdown_content, overwrite=False):
     unit_path = subject_path / f"Unit_{unit}.pdf"
     md_path = subject_path / f"Unit_{unit}.md"
     
+    # Create Backup before modifying
+    if unit_path.exists():
+        backup_path = subject_path / f"Unit_{unit}.pdf.bak"
+        try: shutil.copy(unit_path, backup_path)
+        except: pass
+    
     # Convert new content to PDF
     new_pdf_bytes = convert_markdown_to_pdf(markdown_content)
     
@@ -704,6 +710,24 @@ def consolidate_pdf(subject, unit, markdown_content, overwrite=False):
         
     except Exception as e:
         return False, f"❌ Error: {str(e)}"
+
+def undo_last_change(subject, unit):
+    """Restores the .bak file if it exists."""
+    ensure_root_dir()
+    subject_path = ROOT_DIR / subject
+    unit_path = subject_path / f"Unit_{unit}.pdf"
+    backup_path = subject_path / f"Unit_{unit}.pdf.bak"
+    
+    if backup_path.exists():
+        try:
+            shutil.copy(backup_path, unit_path)
+            # We don't delete backup, allowing multiple undo/redos? No, undo is one step.
+            # But let's keep it safe.
+            return True, "✅ Undid last change! (Restored backup)"
+        except Exception as e:
+            return False, f"❌ Undo failed: {str(e)}"
+    else:
+        return False, "⚠️ No backup found (Nothing to undo)."
 
 # Note: API key is now hardcoded in main() function at line 1394
 
@@ -1585,10 +1609,30 @@ def main():
                         else: st.error(msg)
                 
                 def do_clear(): st.session_state.note_editor = ""
+                
+                def do_undo():
+                    ok, msg = undo_last_change(selected_subject, selected_unit)
+                    if ok:
+                        st.success(msg)
+                        # Sync Undo
+                        t = st.session_state.gh_token or st.secrets.get("GITHUB_TOKEN")
+                        r = st.session_state.get("gh_repo") or st.secrets.get("GITHUB_REPO")
+                        if GithubSync and t and r:
+                             try:
+                                s = GithubSync(t, r)
+                                p = ROOT_DIR / selected_subject / f"Unit_{selected_unit}.pdf"
+                                o, sm = s.push_file(p, f"Undo Change {selected_subject} - Unit {selected_unit}")
+                             except: pass
+                    else:
+                         st.error(msg)
 
-                b1, b2 = st.columns(2)
-                b1.button(f"📥 {write_mode} PDF", type="primary", use_container_width=True, on_click=do_update)
+                b1, b2, b3 = st.columns([1, 1, 1])
+                b1.button(f"📥 {write_mode}", type="primary", use_container_width=True, on_click=do_update)
                 b2.button("🗑️ Clear", use_container_width=True, on_click=do_clear)
+                
+                # Check if backup exists to show undo
+                has_backup = (ROOT_DIR / selected_subject / f"Unit_{selected_unit}.pdf.bak").exists()
+                b3.button("↩️ Undo", use_container_width=True, on_click=do_undo, disabled=not has_backup, help="Restore previous PDF version")
 
             with col_e2:
                 st.markdown("#### 👁️ Preview")
