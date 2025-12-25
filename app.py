@@ -1611,22 +1611,13 @@ def main():
                 # Embed PDF
                 with open(pdf_path, "rb") as f:
                     b64_pdf = base64.b64encode(f.read()).decode('utf-8')
-                # Embed PDF viewer (Object tag is more reliable than iframe for base64)
-                pdf_display = f"""
-                    <div style="display:flex; justify-content:center; margin-bottom: 20px;">
-                        <object data="data:application/pdf;base64,{b64_pdf}" type="application/pdf" width="100%" height="800px">
-                            <p>It appears your browser cannot display the PDF directly.</p>
-                            <a href="data:application/pdf;base64,{b64_pdf}" download="{selected_subject}_Unit_{selected_unit}.pdf">Click here to download it.</a>
-                        </object>
-                    </div>
-                """
+                # Embed PDF viewer (Iframe method as requested)
+                pdf_display = f'<iframe src="data:application/pdf;base64,{b64_pdf}" width="100%" height="800" type="application/pdf" style="border-radius:10px;"></iframe>'
                 st.markdown(pdf_display, unsafe_allow_html=True)
                 
                 # Manual Fallback Links
-                st.caption("Common Issues: Mobile browsers often block PDF embedding.")
-                d1, d2 = st.columns(2)
-                d1.download_button("⬇️ Download PDF", data=open(pdf_path, "rb"), file_name=f"{selected_subject}_U{selected_unit}.pdf", use_container_width=True)
-                # Note: We can't easily "Open in new tab" a base64 string on Streamlit Cloud without valid URL. Download is best.
+                st.caption("If the PDF doesn't load above, use the button below:")
+                st.download_button("⬇️ Download PDF", data=open(pdf_path, "rb"), file_name=f"{selected_subject}_U{selected_unit}.pdf", use_container_width=True)
             else:
                 st.warning(f"No PDF found for **{selected_subject} / Unit {selected_unit}**.")
                 st.info("Go to Editor to write and create one!")
